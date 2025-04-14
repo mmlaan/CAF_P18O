@@ -1,0 +1,135 @@
+---
+title: "CAF P-18O SoilR Model"
+author: "M Laan"
+date: "2025-04-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## CAF P18O Modeling
+
+```{r libraries, echo = FALSE}
+
+library(SoilR)
+library(knitr)
+
+```
+
+## Available (Mehlich 3) vs. Non-Availble (Total P) Pools 
+
+
+#Pools: 
+
+Plant Available (1140 kg/ha) (Aline) (need to change to 12 ha catchment instead of field)
+
+Hardly Available (16,170 kg/ha) (Aline) (need to change to 12 ha catchment instead of field)
+
+#Fluxes:  
+
+- Deposition to Available (0.27 kg/ha/yr) (https://pubs.rsc.org/en/content/articlelanding/2014/em/c3em00641g)
+
+- Plant Uptake from Available (13.95 kg/ha/yr) (https://agdatacommons.nal.usda.gov/articles/dataset/LTAR_Phosphorus_Budget_Summary/24855381)
+
+- Run-off from Available (0.11 kg/ha/yr) (Aline LOADEST - change to water year estimates and P run-off)
+
+- Hardly available to available (64.68 kg/ha/yr) (based on 0.4% decrease in TP)
+
+
+
+```{r soil pools}
+
+tau = seq(0,1000) #vector of transit times
+
+a = seq(0,1000) # vector of ages
+
+#col 1 veg
+#col 2 mineral
+
+
+uP = matrix(c(0, 0.27), nrow = 2) # external inputs (deposition, no fixation or weathering)
+
+# steady state contents of pools (avaialble, non-available)
+xP <- matrix(c(16170, 1140), nrow = 2)
+
+
+# Internal flux matrix FP (kg/ha/yr)
+# Row i = to pool i, Column j = from pool j
+# F[1,1] = -13.95 + -0.11 (plant uptake, run-off/leaching)
+# F[1,2] = 0 (availble to not available)
+# F[2,1] = 0(to not available from available)
+# F[2,2] = -64.68 (loss from not available to available)  (leaching)
+FP <- matrix(c(
+  -64.68, 0,
+   64.68, -14.06), nrow = 2, byrow = TRUE)
+
+BP = FP/as.numeric(xP)
+
+BP
+
+# System age
+Pa = systemAge(BP, uP, a)
+
+# Transit Time
+Ptt = transitTime(BP, uP, tau)
+
+print(Pa$meanSystemAge)
+print(Pa$meanPoolAge)
+
+print(Ptt$meanTransitTime)
+
+Ptt$transitTimeDensity
+
+
+
+```
+## Tile Drain Transit Time
+
+# Pool 1: Hardly Available P (16,170 kg/ha)
+# Pool 2: Plant Available P (1,140 kg/ha)
+# Pool 3: Run-off P (0 kg/ha - loss pool)
+
+```{r try to estimate tile drain age}
+
+tau = seq(0,1000) #vector of transit times
+
+a = seq(0,1000) # vector of ages
+
+#pool 
+
+uP = matrix(c(0, 0.27, 0), nrow = 3) # external inputs (deposition, no fixation or weathering)
+
+# steady state contents of pools 
+xP <- matrix(c(16170, 1140, 0), ncol = 3)
+
+
+# Internal flux matrix FP (kg/ha/yr)
+
+FP <- matrix(c(
+  -64.68,  0, 0, #From hardly available to plant available
+  64.68, -14.06, 0, # from hardly available to plant available, harvest losses, run off losses
+  0, 0.11, 0), # runoff to loss pool
+  nrow = 3, byrow = TRUE)
+
+BP = FP/as.numeric(xP)
+
+BP
+
+# System age
+Pa = systemAge(BP, uP, a)
+
+# Transit Time
+Ptt = transitTime(BP, uP, tau)
+
+print(Pa$meanSystemAge)
+print(Pa$meanPoolAge)
+
+print(Ptt$meanTransitTime)
+
+
+
+
+```
+
