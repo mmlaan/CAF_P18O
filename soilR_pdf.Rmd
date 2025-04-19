@@ -11,17 +11,18 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
 ```
 
-## CAF P18O Modeling
+## CAF P<sup>18</sup>O Modeling
 
 - Have tried 3 pool model (vegetation, plant available P, not available P), 3 pool model (tile drain, plant available P, not available P), 2 pool model (plant available P, not available P), 1 pool model (plant available P)
 
 - No models are currently in steady state
 
-- most models having issues calculating systemAge because of non-steady state and pools that do not include both inputs and outputs
+- 1 pool model not calculating systemAge. need to figure out why if this is of interest 
 
 - estimated DRP in runoff from Aline's LOADEST results and Katie's WY budgets
 
-- Added plots of transit time changing with estimated DRP based on WY estimates - not sure if this is that helpful
+- Added plots of transit time changing with estimated DRP based on WY estimates - not sure if this is that helpful, but shows that transit time is faster in WY with greater Q:P
+  - all models have similar mean system transit times (~40 years) except for the 1 pool model that is not working
 
 ```{r libraries, include = FALSE, echo = FALSE}
 
@@ -49,7 +50,7 @@ library(ggplot2)
 - Hardly Available (4349.75 kg ha<sup>-1</sup>) (Aline)
   - Estimated by subtracting average Mehlich 3-P from average Total P
   - Average of 2016/2018 Total P - Average Mehlich 3-P, bulk density
-   - $\frac{\text{0.68 g TP}}{kg}$ - $\frac{\text{0.045 g Mehlich}} {kg}$) * $\frac{\text{1370 }kg}{m^3}$ * 0.5 m * $\frac{\text{10000 }m^2}{ha}$ * $\frac{\text{1 kg P}}{10^6 mg} $
+   - ($\frac{\text{0.68 g TP}}{kg}$ - $\frac{\text{0.045 g Mehlich}} {kg}$) * $\frac{\text{1370 }kg}{m^3}$ * 0.5 m * $\frac{\text{10000 }m^2}{ha}$ * $\frac{1 kg}{10^6 mg}$
 
 <br>
   
@@ -60,13 +61,19 @@ library(ggplot2)
   - This is probably an underestimated assuming baling efficiency, what is removed from field, etc. and doesn't match big plant uptake flux well 
 <br> 
 
+- Tile Drain (0.01, non-zero pool)
+  - tried to add this to get at tile drain age. when it is just an output, information can be inferred from changing mean transit time of the whole system 
+  
+<br>
+  
 #Fluxes:  
 
 - Deposition to Available (0.27 kg ha<sup>-1</sup> yr<sup>-1</sup>)
   - https://pubs.rsc.org/en/content/articlelanding/2014/em/c3em00641g
   - Assuming this goes to Plant Available pool
 <br>
-- Plant Uptake from Available (13.95 kg ha<sup>-1</sup> yr<sup>-1</sup>)   - https://agdatacommons.nal.usda.gov/articles/dataset/LTAR_Phosphorus_Budget_Summary/24855381
+- Plant Uptake from Available (13.95 kg ha<sup>-1</sup> yr<sup>-1</sup>)
+  - https://agdatacommons.nal.usda.gov/articles/dataset/LTAR_Phosphorus_Budget_Summary/24855381
 <br>
 - Run-off from Available (0.01 - 0.11 kg ha<sup>-1</sup> yr<sup>-1</sup>)) (Aline)
   - used Aline's LOADEST results and scaled/made a linear model to estimate runoff in other water years based on Q:P from Katie's water budget
@@ -77,8 +84,8 @@ library(ggplot2)
   -10% decrease in TP w/o P fertilization from 1989 to 2015. Assume 0.4% flux to available P from non-available P so that plant available remains the same
   - might get reviewer push back from this assumption?
 <br>
-- Crop residue to soil (0)
-  - assume cereal grains have negligible P returns to soil pools
+- Crop residue to soil (1)
+  - assume cereal grains have negligible P returns to soil pools, but need a value so that pools have input and output
   - https://www.sciencedirect.com/science/article/abs/pii/S0038071714000923
 <br>  
 - Erosion (0)
@@ -95,19 +102,22 @@ library(ggplot2)
 plant_p = 308.25 #plant available p
 non_available_p = 4349.75 # non plant available p
 vegetation = 1.27 # vegetation
+tile_drain = 0.01 # small pool, can't be 0 in model
 
 ## Fluxes
 # Inputs
 deposition = 0.27 #deposition
-#Outputs (change to define by WY)
-subsurface_flow = 0.11
-veg_loss = 10 # have to have this to not break model, need to look into P loss in veg better
+#Outputs (subsurface flow defined later by WY)
+veg_loss = 12.68 # have to have this to not break model, need to look into P loss in veg better
+
 # Internal Fluxes
 to_available = 17.40 #non-available to available P 
+to_unavailable = 1 #small flux so that pools have input and output
 plant_uptake = 13.95 #plant uptake from available pool
+from_litter = 1 #small flux so that pools have input and output
 
-tau = seq(0,1000) #vector of transit times
-a = seq(0,1000) # vector of ages 
+tau = seq(0,500) #vector of transit times
+a = seq(0,500) # vector of ages 
 
 
 ```
@@ -200,18 +210,18 @@ xP_3_pool = matrix(c(vegetation, plant_p, non_available_p), 3,3, byrow = T)
   # Internal flux matrix FP (kg/ha/yr)
 # To (1) Vegetation (2) Plant Available (3) Not Available
 FP_3_pool_scaled = matrix(c(
-    -veg_loss, plant_uptake, 0, # From (1) Vegetation
+    -(veg_loss + from_litter), plant_uptake, 0, # From (1) Vegetation
     
-    plant_uptake, -(plant_uptake + subsurface_flow_scaled + to_available), 0, # From (2) Plant Available
-    0, to_available, -(to_available)), # From (3) Not Available
+    from_litter, -(plant_uptake + subsurface_flow_scaled + to_unavailable), to_available, # From (2) Plant Available
+    0, to_unavailable, -(to_available)), # From (3) Not Available
    3, 3, byrow = TRUE)
 
 # To (1) Vegetation (2) Plant Available (3) Not Available
 FP_3_pool_linear = matrix(c(
-    -veg_loss, plant_uptake, 0, # From (1) Vegetation
+   -(veg_loss + from_litter), plant_uptake, 0, # From (1) Vegetation
     
-    plant_uptake, -(plant_uptake + subsurface_flow_linear + to_available), 0, # From (2) Plant Available
-    0, to_available, -(to_available)), # From (3) Not Available
+    from_litter, -(plant_uptake + subsurface_flow_scaled + to_unavailable), to_available, # From (2) Plant Available
+    0, to_unavailable, -(to_available)), # From (3) Not Available
    3, 3, byrow = TRUE)
 
 BP_3_pool_scaled = FP_3_pool_scaled/as.numeric(xP_3_pool)
@@ -249,11 +259,11 @@ results_3_pool = rbind(results_3_pool, data.frame(
 
 ggplot(results_3_pool) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
-  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"), size = 3) +
+  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
-  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
+  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
   labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
-       x = "Subsurface Flow (kg/ha/yr)", 
+       x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
@@ -264,8 +274,6 @@ ggplot(results_3_pool) +
 - Pools: Plant Available, Hardly Available
 - Fluxes: Deposition, Subsurface Runoff, Plant Uptake, Hardly Available to Plant available
 
-- systemAge breaks from having singular solution
-- Hardly available pool is circular (only out output, no inputs)
 
 ![2 Pool Diagram](C:\Users\maggi\Pictures\2_pool_model.PNG)
 
@@ -289,13 +297,13 @@ xP_2_pool = matrix(c(plant_p, non_available_p), 2,2, byrow = T)
 # To (1) Vegetation (2) Plant Available (3) Not Available
 FP_2_pool_scaled = matrix(c(
     -(plant_uptake + subsurface_flow_scaled), to_available,
-       0, -(to_available)), 
+       to_unavailable, -(to_available)), 
    2, 2, byrow = TRUE)
 
 # To (1) Vegetation (2) Plant Available (3) Not Available
 FP_2_pool_linear = matrix(c(
      -(plant_uptake + subsurface_flow_scaled), to_available,
-       0, -(to_available)), 
+       to_unavailable, -(to_available)), 
    2, 2, byrow = TRUE)
 
 BP_2_pool_scaled = FP_2_pool_scaled/as.numeric(xP_2_pool)
@@ -303,8 +311,8 @@ BP_2_pool_scaled = FP_2_pool_scaled/as.numeric(xP_2_pool)
 BP_2_pool_linear = FP_2_pool_linear/as.numeric(xP_2_pool)
 
 # System age
-#Pa_2_pool_scaled = systemAge(BP_2_pool_scaled, uP_2_pool, a)
-#Pa_2_pool_linear = systemAge(BP_2_pool_linear, uP_2_pool, a)
+Pa_2_pool_scaled = systemAge(BP_2_pool_scaled, uP_2_pool, a)
+Pa_2_pool_linear = systemAge(BP_2_pool_linear, uP_2_pool, a)
 
 # Transit Time
 Ptt_2_pool_scaled = transitTime(BP_2_pool_scaled, uP_2_pool, tau)
@@ -314,28 +322,28 @@ Ptt_2_pool_linear = transitTime(BP_2_pool_linear, uP_2_pool, tau)
 results_2_pool = rbind(results_2_pool, data.frame(
     year = year,
     subsurface_flow_scaled = subsurface_flow_scaled,
-    #meanSystemAge_scaled = Pa_2_pool_scaled$meanSystemAge,
+    meanSystemAge_scaled = Pa_2_pool_scaled$meanSystemAge,
     meanTransitTime_scaled = Ptt_2_pool_scaled$meanTransitTime,
-   # meanAge_veg_scaled = Pa_2_pool_scaled$meanPoolAge[1],
-   # meanAge_plant_scaled = Pa_2_pool_scaled$meanPoolAge[2],
-   # meanAge_nonavail_scaled = Pa_2_pool_scaled$meanPoolAge[3],
+    meanAge_veg_scaled = Pa_2_pool_scaled$meanPoolAge[1],
+    meanAge_plant_scaled = Pa_2_pool_scaled$meanPoolAge[2],
+    meanAge_nonavail_scaled = Pa_2_pool_scaled$meanPoolAge[3],
     subsurface_flow_linear = subsurface_flow_linear,
-    #meanSystemAge_linear = Pa_2_pool_linear$meanSystemAge,
-    meanTransitTime_linear = Ptt_2_pool_linear$meanTransitTime#,
-   # meanAge_veg_linear = Pa_2_pool_linear$meanPoolAge[1],
-    #meanAge_plant_linear = Pa_2_pool_linear$meanPoolAge[2],
-   # meanAge_nonavail_linear = Pa_2_pool_linear$meanPoolAge[3]
+    meanSystemAge_linear = Pa_2_pool_linear$meanSystemAge,
+    meanTransitTime_linear = Ptt_2_pool_linear$meanTransitTime,
+    meanAge_veg_linear = Pa_2_pool_linear$meanPoolAge[1],
+    meanAge_plant_linear = Pa_2_pool_linear$meanPoolAge[2],
+    meanAge_nonavail_linear = Pa_2_pool_linear$meanPoolAge[3]
   ))
 
 }
 
 ggplot(results_2_pool) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
-  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"), size = 3) +
+  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
-  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
+  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
   labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
-       x = "Subsurface Flow (kg/ha/yr)", 
+       x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
@@ -345,9 +353,7 @@ ggplot(results_2_pool) +
 
 - Pools: Runoff, Plant Available, Hardly Available
   - Have to assume small, nonzero value for runoff pool 
-  - systemAge breaks from having singular solution
-  - something is wrong here, run-off age is negative
-
+  
 ![3 Pool Diagram, Tile Drain](C:\Users\maggi\Pictures\3_pool_td.PNG)
 
 ```{r 3 Pool method, Tile Drain}
@@ -366,7 +372,7 @@ uP_3_drain = matrix(c(0, deposition, 0), 3,1, byrow = T) # external inputs
 
 # steady state contents of pools 
 # have to make runoff pool non-zero so that I don't get error (maybe precipitation P?)
-xP_3_drain = matrix(c(0.01, plant_p, non_available_p), 3,3, byrow = T)
+xP_3_drain = matrix(c(tile_drain, plant_p, non_available_p), 3,3, byrow = T)
 
 
   # Internal flux matrix FP (kg/ha/yr)
@@ -374,16 +380,16 @@ xP_3_drain = matrix(c(0.01, plant_p, non_available_p), 3,3, byrow = T)
 FP_3_drain_scaled = matrix(c(
      -subsurface_flow_scaled, subsurface_flow_scaled, 0, # To (1) Tile Drain
     
-    0, -(plant_uptake + subsurface_flow_scaled) , to_available, # To (2) Plant Available
-    0, 0, -to_available),
+    0, -(plant_uptake + subsurface_flow_scaled + to_unavailable), to_available, # To (2) Plant Available
+    0, to_unavailable, -to_available),
    3, 3, byrow = TRUE)
 
 # To (1) Subsurface (2) Plant Available (3) Not Available
 FP_3_drain_linear = matrix(c(
-     -subsurface_flow_linear, subsurface_flow_linear, 0, # To (1) Tile Drain
+    -subsurface_flow_scaled, subsurface_flow_scaled, 0, # To (1) Tile Drain
     
-    0, -(plant_uptake + subsurface_flow_linear) , to_available, # To (2) Plant Available
-    0, 0, -to_available),
+    0, -(plant_uptake + subsurface_flow_scaled + to_unavailable), to_available, # To (2) Plant Available
+    0, to_unavailable, -to_available),
    3, 3, byrow = TRUE)
 
 BP_3_drain_scaled = FP_3_drain_scaled/as.numeric(xP_3_drain)
@@ -391,8 +397,8 @@ BP_3_drain_scaled = FP_3_drain_scaled/as.numeric(xP_3_drain)
 BP_3_drain_linear = FP_3_drain_linear/as.numeric(xP_3_drain)
 
 # System age
-#Pa_3_drain_scaled = systemAge(BP_3_drain_scaled, uP_3_drain, a)
-#Pa_3_drain_linear = systemAge(BP_3_drain_linear, uP_3_drain, a)
+Pa_3_drain_scaled = systemAge(BP_3_drain_scaled, uP_3_drain, a)
+Pa_3_drain_linear = systemAge(BP_3_drain_linear, uP_3_drain, a)
 
 # Transit Time
 Ptt_3_drain_scaled = transitTime(BP_3_drain_scaled, uP_3_drain, tau)
@@ -402,28 +408,28 @@ Ptt_3_drain_linear = transitTime(BP_3_drain_linear, uP_3_drain, tau)
 results_3_drain = rbind(results_3_drain, data.frame(
     year = year,
     subsurface_flow_scaled = subsurface_flow_scaled,
-    #meanSystemAge_scaled = Pa_3_drain_scaled$meanSystemAge,
+    meanSystemAge_scaled = Pa_3_drain_scaled$meanSystemAge,
     meanTransitTime_scaled = Ptt_3_drain_scaled$meanTransitTime,
-    #meanAge_drain_scaled = Pa_3_drain_scaled$meanPoolAge[1],
-    #meanAge_plant_scaled = Pa_3_drain_scaled$meanPoolAge[2],
-    #meanAge_nonavail_scaled = Pa_3_drain_scaled$meanPoolAge[3],
+    meanAge_drain_scaled = Pa_3_drain_scaled$meanPoolAge[1],
+    meanAge_plant_scaled = Pa_3_drain_scaled$meanPoolAge[2],
+    meanAge_nonavail_scaled = Pa_3_drain_scaled$meanPoolAge[3],
     subsurface_flow_linear = subsurface_flow_linear,
-    #meanSystemAge_linear = Pa_3_drain_linear$meanSystemAge,
-    meanTransitTime_linear = Ptt_3_drain_linear$meanTransitTime#,
-    #meanAge_drain_linear = Pa_3_drain_linear$meanPoolAge[1],
-    #meanAge_plant_linear = Pa_3_drain_linear$meanPoolAge[2],
-    #meanAge_nonavail_linear = Pa_3_drain_linear$meanPoolAge[3]
+    meanSystemAge_linear = Pa_3_drain_linear$meanSystemAge,
+    meanTransitTime_linear = Ptt_3_drain_linear$meanTransitTime,
+    meanAge_drain_linear = Pa_3_drain_linear$meanPoolAge[1],
+    meanAge_plant_linear = Pa_3_drain_linear$meanPoolAge[2],
+    meanAge_nonavail_linear = Pa_3_drain_linear$meanPoolAge[3]
   ))
 
 }
 
 ggplot(results_3_drain) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
-  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"), size = 3) +
+  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
-  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
+  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
   labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
-       x = "Subsurface Flow (kg/ha/yr)", 
+       x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
@@ -455,30 +461,30 @@ for (i in 1:nrow(p_runoff)) {
   BP_linear = matrix(-k_linear, nrow = 1, ncol = 1)
   BP_scale = matrix(-k_scale, nrow = 1, ncol = 1)
   
-  # Inputs must balance outputs at steady state
-  uP_linear = matrix( subsurface_flow_linear, nrow = 1, ncol = 1)
-  uP_scale = matrix( subsurface_flow_scaled, nrow = 1, ncol = 1) 
+
+  #uP = matrix(deposition, nrow = 1, ncol = 1)
   
+  # Inputs must balance outputs at steady state
+  uP = matrix(subsurface_flow_scaled, 1,1)
+
   # Compute system age and transit time
-  #age_obj <- systemAge(BP, uP, a) #age not working
-  Ptt_linear <- transitTime(BP_linear, uP_linear, tau)
-  Ptt_scale = transitTime(BP_scale, uP_scale, tau)
+  #Pa_scale = systemAge(BP_scale, uP, a)
+  
+  
+  #Pa_scale <- systemAge(BP_scale, uP, a)
+  #Pa_linear = systemAge(BP_linear, uP, a)
+  Ptt_linear = transitTime(BP_linear, uP, tau)
+  Ptt_scale = transitTime(BP_scale, uP, tau)
   
   
   results_1_pool = rbind(results_1_pool, data.frame(
     year = year,
     subsurface_flow_scaled = subsurface_flow_scaled,
-    #meanSystemAge_scaled = Pa_3_drain_scaled$meanSystemAge,
+   # meanSystemAge_scaled = Pa_scale$meanSystemAge,
     meanTransitTime_scaled = Ptt_scale$meanTransitTime,
-    #meanAge_drain_scaled = Pa_3_drain_scaled$meanPoolAge[1],
-    #meanAge_plant_scaled = Pa_3_drain_scaled$meanPoolAge[2],
-    #meanAge_nonavail_scaled = Pa_3_drain_scaled$meanPoolAge[3],
     subsurface_flow_linear = subsurface_flow_linear,
-    #meanSystemAge_linear = Pa_3_drain_linear$meanSystemAge,
-    meanTransitTime_linear = Ptt_linear$meanTransitTime#,
-    #meanAge_drain_linear = Pa_3_drain_linear$meanPoolAge[1],
-    #meanAge_plant_linear = Pa_3_drain_linear$meanPoolAge[2],
-    #meanAge_nonavail_linear = Pa_3_drain_linear$meanPoolAge[3]
+    #meanSystemAge_linear = Pa_linear$meanSystemAge,
+    meanTransitTime_linear = Ptt_linear$meanTransitTime
   ))
 }
 
@@ -488,7 +494,7 @@ ggplot(results_1_pool) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
   geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
   labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
-       x = "Subsurface Flow (kg/ha/yr)", 
+       x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
@@ -496,4 +502,3 @@ ggplot(results_1_pool) +
 
 
 ```
-
