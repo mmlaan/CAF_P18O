@@ -2,7 +2,9 @@
 title: "CAF P-18O SoilR Model"
 author: "M Laan"
 date: "2025-04-13"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -17,12 +19,13 @@ rm(list = ls())
 
 - No models are currently in steady state
 
-- 1 pool model not calculating systemAge. need to figure out why if this is of interest 
+- The 1 pool model is currently not calculating systemAge. need to figure out why if this is of interest 
 
-- estimated DRP in runoff from Aline's LOADEST results and Katie's WY budgets
+- Estimated DRP in runoff from Aline's LOADEST results and Katie's WY budgets
 
 - Added plots of transit time changing with estimated DRP based on WY estimates - not sure if this is that helpful, but shows that transit time is faster in WY with greater Q:P
-  - all models have similar mean system transit times (~40 years) except for the 1 pool model that is not working
+
+  - All models have similar mean system transit times (~40 years) except for the 1 pool model that is not working
 
 ```{r libraries, include = FALSE, echo = FALSE}
 
@@ -34,10 +37,8 @@ library(ggplot2)
 
 ```
 
-# Available (Mehlich 3) vs. Non-Available (Total P - Mehlich 3) Pools 
 
-
-#Pools: 
+### Pools: 
 
 - Plant Available (308.25 kg ha<sup>-1</sup>) (Aline)
   - Average of 2016/2018 0 - 50 cm toe and top slope Mehlich 3-P and bulk density, depth of sampling? (0.5 m)
@@ -45,56 +46,64 @@ library(ggplot2)
   
     - Aline has bulk density reported as mg cm<sup>-3</sup>, but this seems wrong. I've been using the reported values as g cm<sup>-3</sup>
 
-<br>
 
 - Hardly Available (4349.75 kg ha<sup>-1</sup>) (Aline)
   - Estimated by subtracting average Mehlich 3-P from average Total P
   - Average of 2016/2018 Total P - Average Mehlich 3-P, bulk density
    - ($\frac{\text{0.68 g TP}}{kg}$ - $\frac{\text{0.045 g Mehlich}} {kg}$) * $\frac{\text{1370 }kg}{m^3}$ * 0.5 m * $\frac{\text{10000 }m^2}{ha}$ * $\frac{1 kg}{10^6 mg}$
 
-<br>
   
 - Vegetation (1.27 kg ha<sup>-1</sup>) (Huggins 2014)
   - https://link.springer.com/article/10.1007/s12155-014-9438-4
   - Harvested straw from all cereals over the course of 3-year WW-SB-SW rotation was 2.9 kg P<sub>2</sub>O<sub>5</sub>
-  
   - This is probably an underestimated assuming baling efficiency, what is removed from field, etc. and doesn't match big plant uptake flux well 
 <br> 
 
 - Tile Drain (0.01, non-zero pool)
-  - tried to add this to get at tile drain age. when it is just an output, information can be inferred from changing mean transit time of the whole system 
+  - Tried to add this to get at tile drain age. when it is just an output, information can be inferred from changing mean transit time of the whole system 
   
-<br>
   
-#Fluxes:  
+### Fluxes:  
 
 - Deposition to Available (0.27 kg ha<sup>-1</sup> yr<sup>-1</sup>)
   - https://pubs.rsc.org/en/content/articlelanding/2014/em/c3em00641g
   - Assuming this goes to Plant Available pool
-<br>
+
+
 - Plant Uptake from Available (13.95 kg ha<sup>-1</sup> yr<sup>-1</sup>)
   - https://agdatacommons.nal.usda.gov/articles/dataset/LTAR_Phosphorus_Budget_Summary/24855381
-<br>
+
+
 - Run-off from Available (0.01 - 0.11 kg ha<sup>-1</sup> yr<sup>-1</sup>)) (Aline)
   - used Aline's LOADEST results and scaled/made a linear model to estimate runoff in other water years based on Q:P from Katie's water budget
-<br>
+
+
 - Hardly available to available (17.40 kg/ha/yr) (based on 0.4% decrease in TP)
   - there is probably a more robust assumption to make here
   - https://www.nature.com/articles/s41598-017-13498-7
   -10% decrease in TP w/o P fertilization from 1989 to 2015. Assume 0.4% flux to available P from non-available P so that plant available remains the same
   - might get reviewer push back from this assumption?
-<br>
+  
+  
+- Available P to Hardly Available P (1)
+  - To get the model to work, a value is required so that all pools have both an input and output. Still need to look at literature here, and may be able to estimate?
+    - I could probably try a sensitivity analysis here to see how much this value impacts the model
+
+
 - Crop residue to soil (1)
-  - assume cereal grains have negligible P returns to soil pools, but need a value so that pools have input and output
+  - The paper below assumes cereal grains have negligible P returns to soil pools. However, to get the model to work, a value is required so that all pools have both an input and output
+    - I could probably try a sensitivity analysis here to see how much this value impacts the model
   - https://www.sciencedirect.com/science/article/abs/pii/S0038071714000923
-<br>  
+
+
 - Erosion (0)
   - assume minimal for No Till
   - https://www.ars.usda.gov/ARSUserFiles/6233/comparisonOfRunoffAndSoil_2.pdf
- <br>  
+
+
 - Surface Flow Losses (0)
   - assume minimal based on Katie's water budget
-<br>
+
 
 ```{r Define Pools and Fluxes}
 
@@ -124,9 +133,10 @@ a = seq(0,500) # vector of ages
 
 ## Runoff Based on WY Budgets
 
-- Tried to estimate DRP in tile drain based on Q:P ratio from Katie's WY budget by scaling and creating a linear model 
+- Tried to estimate DRP in tile drain based on Q:P ratio from Katie's WY budget by scaling (_scaled in dataframes and plots) and creating a linear model (_linear in dataframes and plots)
   - assumed 0 Qsr for 2017 so I could estimate Q:P
   - used Aline's LOADEST results for 2017 (0.11), 2018 (0.09) DRP values to scale for 2019 - 2023 for the rest of Katie's WY budget
+    - similar results for the two methods. DRP ranges from 0.01 - 0.11 for scaled and 0.03 - 0.11 for linear model 
 
 
 ```{r estimate scaled and linear Tile Drain Runoff , results = "asis", warning = FALSE}
@@ -183,13 +193,15 @@ kable(df_fp, caption = "Conceptual FP Matrix: TO (rows) × FROM (columns)")
 ```
 <br>
 
-## 3 Pool Model 
+### 3 Pool Model 
 
 - Pools: Vegetation, Plant Available, Hardly Available
 - Fluxes: Deposition, Subsurface Runoff, Plant Uptake
 - Diagrams have 0.11 for subsurface flow, but is changing with WY in code
 
 ![3 Pool Diagram](C:\Users\maggi\Pictures\3_pool_model.PNG)
+
+
 
 ```{r 3 Pool Model, all Fluxes}
 
@@ -257,25 +269,37 @@ results_3_pool = rbind(results_3_pool, data.frame(
 }
 
 
+
+
+
+```
+
+```{r echo = FALSE}
+
+kable(results_3_pool, caption = "3 Pool Model Age and Transit Times")
+
 ggplot(results_3_pool) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
   geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
   geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
-  labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
+  labs(title = "Subsurface P Flow vs. Transit Time", 
        x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
 ```
 
-## 2 Pool Model 
+
+### 2 Pool Model 
 
 - Pools: Plant Available, Hardly Available
 - Fluxes: Deposition, Subsurface Runoff, Plant Uptake, Hardly Available to Plant available
 
 
 ![2 Pool Diagram](C:\Users\maggi\Pictures\2_pool_model.PNG)
+
+
 
 ```{r 2 Pool Model}
 
@@ -337,24 +361,38 @@ results_2_pool = rbind(results_2_pool, data.frame(
 
 }
 
+
+
+
+```
+
+```{r echo=FALSE} 
+
+kable(results_2_pool, caption = "2 Pool Model Age and Transit Times")
+
 ggplot(results_2_pool) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
   geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
   geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
-  labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
+  labs(title = "Subsurface P Flow vs. Transit Time", 
        x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
-
 ```
-## Tile Drain Transit Time
+
+
+<br>
+
+### Tile Drain Transit Time
 
 - Pools: Runoff, Plant Available, Hardly Available
   - Have to assume small, nonzero value for runoff pool 
   
 ![3 Pool Diagram, Tile Drain](C:\Users\maggi\Pictures\3_pool_td.PNG)
+
+
 
 ```{r 3 Pool method, Tile Drain}
 
@@ -423,24 +461,34 @@ results_3_drain = rbind(results_3_drain, data.frame(
 
 }
 
+
+```
+
+```{r echo = FALSE}
+
+kable(results_3_drain, caption = "3 Pool Model with Tile Drain Age and Transit Times")
+
 ggplot(results_3_drain) +
   geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
   geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"), size = 3) +
   geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
   geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_linear, color = "Linear"),method = "lm", color = "black", se = FALSE) +
-  labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
+  labs(title = "Subsurface P Flow vs. Transit Time", 
        x = "Subsurface DRP (kg/ha/yr)", 
        y = "Mean Transit Time (years)") +
   theme_minimal()
 
 ```
 
-## One pool method with only Plant Available P
+
+### One pool method with only Plant Available P
 
 - With only 1 pool and one output, age and transit time are the same? Age is having error from singular solution
 - Very slow transit times using this method
 
 ![1 Pool Diagram](C:\Users\maggi\Pictures\1_pool_td.PNG)
+
+
 
 ```{r One Pool model}
 
@@ -488,17 +536,24 @@ for (i in 1:nrow(p_runoff)) {
   ))
 }
 
-ggplot(results_1_pool) +
-  geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
-  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"), size = 3) +
-  geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
-  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
-  labs(title = "Subsurface P Flow vs. Transit Time (Scaled)", 
-       x = "Subsurface DRP (kg/ha/yr)", 
-       y = "Mean Transit Time (years)") +
-  theme_minimal()
+
 
 
 
 
 ```
+
+```{r echo = FALSE}
+
+ggplot(results_1_pool) +
+  geom_point(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"), size = 3) +
+  geom_point(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"), size = 3) +
+  geom_smooth(aes(x = subsurface_flow_scaled, y = meanTransitTime_scaled, color = "Scale"),method = "lm", color = "black", se = FALSE) +
+  geom_smooth(aes(x = subsurface_flow_linear, y = meanTransitTime_scaled, color = "Linear"),method = "lm", color = "black", se = FALSE) +
+  labs(title = "Subsurface P Flow vs. Transit Time", 
+       x = "Subsurface DRP (kg/ha/yr)", 
+       y = "Mean Transit Time (years)") +
+  theme_minimal()
+
+```
+
