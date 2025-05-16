@@ -110,20 +110,26 @@ library(ggplot2)
 ## Pools
 plant_p = 308.25 #plant available p
 non_available_p = 4349.75 # non plant available p
-vegetation = 1.27 # vegetation
+vegetation = 13.95 #1.27 # vegetation
 tile_drain = 0.01 # small pool, can't be 0 in model
 
 ## Fluxes
 # Inputs
 deposition = 0.27 #deposition
 #Outputs (subsurface flow defined later by WY)
-veg_loss = 12.68 # have to have this to not break model, need to look into P loss in veg better
+#veg_loss = 12.68 # have to have this to not break model, need to look into P loss in veg better
+
+veg_loss = 13.78#0.17#13.95
 
 # Internal Fluxes
-to_available = 17.40 #non-available to available P 
-to_unavailable = 1 #small flux so that pools have input and output
+#to_available = 17.40 #non-available to available P 
+to_available = 68.25#17.40#68.25
+#to_unavailable = 1 #small flux so that pools have input and output
+to_unavailable = 54.64#68.25#17.40#68.25
+
 plant_uptake = 13.95 #plant uptake from available pool
-from_litter = 1 #small flux so that pools have input and output
+#from_litter = 1 #small flux so that pools have input and output
+from_litter = 0.17#13.78#0
 
 tau = seq(0,500) #vector of transit times
 a = seq(0,500) # vector of ages 
